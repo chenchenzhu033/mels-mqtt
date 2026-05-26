@@ -1,7 +1,7 @@
 {
-    "name": "EMmqtt",
+    "name": "mqtt",
     "version": "1.0.3",
-    "description": "Emakefun company Self-developed mqtt module base on esp8266",
+    "description": "Self-developed mqtt module base on esp8266",
     "license": "MIT",
     "dependencies": {
         "core": "*",
