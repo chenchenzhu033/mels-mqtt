@@ -1,7 +1,7 @@
 {
     "name": "mqtt",
     "version": "1.0.3",
-    "description": "Self-developed mqtt module base on esp8266",
+    "description": "Self-developed MQTT module based on ESP8266",
     "license": "MIT",
     "dependencies": {
         "core": "*",
