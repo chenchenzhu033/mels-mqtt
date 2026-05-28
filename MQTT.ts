@@ -129,7 +129,7 @@ namespace MQTT {
     //% receive.fieldEditor="gridpicker" receive.fieldOptions.columns=3
     //% send.fieldEditor="gridpicker" send.fieldOptions.columns=3
     //% blockId=em_mqtt_setup
-    //% block="Wi-Fi connect | RX: %receive | TX: %send | SSID: %SSID | Password: %PASSWORD"
+    //% block="Wi-Fi connect | TX: %receive | RX: %send | SSID: %SSID | Password: %PASSWORD"
     //% subcategory="Wi-Fi"
     export function em_wifi_connect(/*serial*/receive: SerialPin, send: SerialPin,
         /*wifi*/SSID: string, PASSWORD: string
