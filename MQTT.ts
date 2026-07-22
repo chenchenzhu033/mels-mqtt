@@ -164,7 +164,7 @@ namespace MQTT {
        
         // Emmqtt_serial_init();
         // emqtt_connect_wifi();
-        MQTT_CLIENT_ID = clientId || "";
+        MQTT_CLIENT_ID = clientId || ("mels-" + control.deviceSerialNumber());
         MQTT_CLIENT_NAME = username || "";
         MQTT_CLIENT_PASSWORD = clientPwd || "";
         MQTT_SERVER_IP = serverIp;
@@ -195,7 +195,7 @@ namespace MQTT {
        
         // Emmqtt_serial_init();
         // emqtt_connect_wifi();
-        MQTT_CLIENT_ID = clientId || "";
+        MQTT_CLIENT_ID = clientId || ("mels-" + control.deviceSerialNumber());
         MQTT_CLIENT_NAME = username || "";
         MQTT_CLIENT_PASSWORD = clientPwd || "";
         MQTT_SERVER_IP = serverIp;
