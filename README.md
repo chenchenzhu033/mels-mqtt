@@ -65,19 +65,33 @@ The module supports standard ESP8266 AT commands and MQTT-specific AT extensions
 
 The source file now uses English block labels and category names. The extension remains compatible with the existing module logic and keeps Chinese localization available through `_locales/zh/MQTT-strings.json`.
 
-## MQTT Speech Recognition
+## I2S Microphone Speech Recognition
 
-The `MQTT Speech` blocks add experimental speech-recognition streaming for micro:bit v2. It uses the built-in microphone and publishes audio as text MQTT messages, so it does not require HTTP POST or binary file upload from the micro:bit.
+The `I2S microphone` blocks add experimental speech-recognition streaming for micro:bit v2. It uses an external I2S microphone and publishes audio as text MQTT messages, so it does not require HTTP POST or binary file upload from the micro:bit.
 
 ### Blocks
 
 - `set speech MQTT topic prefix ...`
+- `set I2S microphone pins data ... lrc ... bck ...`
+- `set I2S capture channel ...`
 - `set speech recording duration ... seconds`
 - `subscribe speech result`
 - `record speech and send by MQTT`
 - `record speech for ... seconds and send by MQTT`
 - `speech result ready`
 - `speech text`
+
+### Wiring
+
+Default wiring:
+
+- `G` -> `GND`
+- `V` -> `3V`
+- `DATA` -> `P0`
+- `LRC` -> `P1`
+- `BCK` -> `P2`
+
+If the service receives chunks but the audio is silent, switch the I2S capture channel between `left` and `right`.
 
 ### Topic Protocol
 

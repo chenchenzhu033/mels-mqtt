@@ -1,7 +1,7 @@
 /**
- * Speech-recognition audio streaming over MQTT.
+ * I2S microphone speech-recognition audio streaming over MQTT.
  */
-//% weight=9 color=#0B7285 icon="\uf130" block="MQTT Speech"
+//% weight=9 color=#0B7285 icon="\uf130" block="I2S microphone"
 //% groups='["Configuration", "Recognition"]'
 namespace MQTTSpeech {
     const SAMPLE_RATE = 16000
@@ -23,6 +23,29 @@ namespace MQTTSpeech {
     //% weight=100
     export function setTopicPrefix(prefix: string): void {
         topicPrefix = trimSlash(prefix)
+    }
+
+    /**
+     * Set the I2S microphone pins.
+     */
+    //% blockId=mqtt_speech_set_i2s_pins
+    //% block="set I2S microphone pins data %data lrc %lrc bck %bck"
+    //% data.defl=p0 lrc.defl=p1 bck.defl=p2
+    //% group="Configuration"
+    //% weight=98
+    export function setI2SMicrophonePins(data: DigitalPin, lrc: DigitalPin, bck: DigitalPin): void {
+        configureI2SPinsNative(data, lrc, bck)
+    }
+
+    /**
+     * Select which I2S channel to capture.
+     */
+    //% blockId=mqtt_speech_set_i2s_channel
+    //% block="set I2S capture channel %channel"
+    //% group="Configuration"
+    //% weight=97
+    export function setI2SCaptureChannel(channel: I2SCaptureChannel): void {
+        setI2SCaptureChannelNative(channel)
     }
 
     /**
@@ -53,7 +76,7 @@ namespace MQTTSpeech {
     }
 
     /**
-     * Record with the micro:bit v2 built-in microphone and send audio chunks by MQTT.
+     * Record with the I2S microphone and send audio chunks by MQTT.
      */
     //% blockId=mqtt_speech_record_send
     //% block="record speech and send by MQTT"
@@ -74,7 +97,7 @@ namespace MQTTSpeech {
     export function recordAndSendFor(seconds: number): void {
         const duration = clampSeconds(seconds)
         const session = "" + control.millis()
-        const chunk = pins.createBuffer(48)
+        const chunk = pins.createBuffer(256)
         const endAt = input.runningTime() + duration * 1000
         let index = 0
 
@@ -82,6 +105,12 @@ namespace MQTTSpeech {
         lastText = ""
         MQTT.__speechPublish(beginTopic(), "session=" + session + ";rate=" + SAMPLE_RATE + ";bits=16;channels=1;seconds=" + duration + ";encoding=pcm16le-hex")
         startNative()
+        const startStatus = statusNative()
+        if (startStatus != 1) {
+            stopNative()
+            MQTT.__speechPublish(endTopic(), "session=" + session + ";chunks=0;error=i2s-start-" + startStatus)
+            return
+        }
 
         while (input.runningTime() < endAt) {
             const n = readPcmIntoBufferNative(chunk)
@@ -117,6 +146,18 @@ namespace MQTTSpeech {
     //% weight=55
     export function speechText(): string {
         return lastText
+    }
+
+    /**
+     * Return the native microphone status for troubleshooting.
+     * 1 means started, -1 means this target has no I2S support, -2 means an I2S pin was not found.
+     */
+    //% blockId=mqtt_speech_microphone_status
+    //% block="microphone status"
+    //% group="Recognition"
+    //% weight=50
+    export function microphoneStatus(): number {
+        return statusNative()
     }
 
     function beginTopic(): string {
@@ -181,4 +222,26 @@ namespace MQTTSpeech {
     function readPcmIntoBufferNative(buffer: Buffer): number {
         return 0
     }
+
+    //% shim=MQTTSpeech::status
+    function statusNative(): number {
+        return 0
+    }
+
+    //% shim=MQTTSpeech::configureI2SPins
+    function configureI2SPinsNative(data: DigitalPin, lrc: DigitalPin, bck: DigitalPin): void {
+        return
+    }
+
+    //% shim=MQTTSpeech::setI2SCaptureChannel
+    function setI2SCaptureChannelNative(channel: I2SCaptureChannel): void {
+        return
+    }
+}
+
+enum I2SCaptureChannel {
+    //% block="left"
+    Left = 0,
+    //% block="right"
+    Right = 1
 }
