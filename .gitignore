@@ -1,0 +1,11 @@
+node_modules/
+pxt_modules/
+package.json
+package-lock.json
+tsconfig.json
+.pxt/
+built/
+*.hex
+*.uf2
+__pycache__/
+*.pyc

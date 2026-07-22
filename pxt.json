@@ -1,0 +1,23 @@
+{
+    "name": "i2s-microphone",
+    "version": "0.0.1",
+    "description": "MakeCode extension for using an I2S microphone on micro:bit v2.",
+    "license": "MIT",
+    "dependencies": {
+        "core": "*",
+        "microphone": "*"
+    },
+    "files": [
+        "main.ts",
+        "shims.cpp",
+        "README.md"
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "public": true,
+    "supportedTargets": [
+        "microbit"
+    ],
+    "preferredEditor": "blocksprj"
+}
