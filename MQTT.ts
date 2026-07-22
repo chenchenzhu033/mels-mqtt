@@ -224,6 +224,17 @@ namespace MQTT {
         basic.pause(200); // limit user pub rate
     }
 
+    //% blockHidden=true
+    export function __speechPublish(topic: string, data: string): void {
+        if (!EMMQTT_SERIAL_INIT) {
+            emmqtt_serial_init()
+        }
+        topic = topic.replace(",", "")
+        data = data.replace("\"", "'")
+        serial.writeString("AT+MQTTPUB=0,\"" + topic + "\",\"" + data + "\",1,0\r\n")
+        basic.pause(30)
+    }
+
     /**
      * Set MQTT subscribe
      * @param topic Mqtt topic; eg: test

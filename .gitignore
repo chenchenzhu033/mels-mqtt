@@ -1,0 +1,9 @@
+node_modules/
+pxt_modules/
+package.json
+package-lock.json
+built/
+*.hex
+*.uf2
+__pycache__/
+*.pyc
