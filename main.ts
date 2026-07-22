@@ -1,120 +1,89 @@
 /**
- * Blocks for an external I2S microphone.
+ * Blocks for the micro:bit v2 built-in microphone.
  */
-//% weight=90 color=175 icon="\uf130" block="I2S microphone"
-//% groups='["Configuration", "Recording", "Speech recognition"]'
+//% weight=90 color=175 icon="\uf130" block="micro:bit microphone"
+//% groups='["Configuration", "Speech recognition"]'
 namespace i2sMicrophone {
-    export enum SampleRate {
-        //% block="8 kHz"
-        Rate8000 = 8000,
-        //% block="16 kHz"
-        Rate16000 = 16000,
-        //% block="32 kHz"
-        Rate32000 = 32000
-    }
+    const SAMPLE_RATE = 16000
+    const MIN_SECONDS = 1
+    const MAX_SECONDS = 30
 
-    let currentRate = SampleRate.Rate16000
+    let serviceUrl = ""
+    let recordSeconds = 3
     let resultText = ""
     let resultReady = false
 
     /**
-     * Bind the DATA, LRC and BCK pins used by the I2S microphone.
-     * Default wiring: DATA=P0, LRC=P1, BCK=P2.
+     * Set the full speech-recognition service URL used by the serial gateway.
      */
-    //% blockId=i2s_microphone_set_pins
-    //% block="set I2S microphone DATA %dataPin LRC %lrcPin BCK %bckPin"
-    //% dataPin.defl=DigitalPin.P0 lrcPin.defl=DigitalPin.P1 bckPin.defl=DigitalPin.P2
+    //% blockId=microbit_microphone_set_service_url
+    //% block="set speech service URL %url"
+    //% url.defl="http://localhost:8000/speech-to-text"
     //% group="Configuration"
     //% weight=100
-    export function setPins(dataPin: DigitalPin, lrcPin: DigitalPin, bckPin: DigitalPin): void {
-        setPinsNative(dataPin, lrcPin, bckPin)
+    export function setSpeechServiceUrl(url: string): void {
+        serviceUrl = url
     }
 
     /**
-     * Set the sample rate for I2S capture.
+     * Set the recording duration. Values outside 1-30 seconds are clamped.
      */
-    //% blockId=i2s_microphone_set_sample_rate
-    //% block="set I2S microphone sample rate %rate"
+    //% blockId=microbit_microphone_set_record_seconds
+    //% block="set speech recording duration %seconds seconds"
+    //% seconds.min=1 seconds.max=30 seconds.defl=3
     //% group="Configuration"
     //% weight=95
-    export function setSampleRate(rate: SampleRate): void {
-        currentRate = rate
-        setSampleRateNative(rate)
+    export function setRecordingDuration(seconds: number): void {
+        recordSeconds = clampSeconds(seconds)
     }
 
     /**
-     * Start capturing raw PCM samples from the microphone.
+     * Record with the built-in microphone, send audio to the configured service, and wait for text.
      */
-    //% blockId=i2s_microphone_start
-    //% block="start I2S microphone"
-    //% group="Recording"
-    //% weight=90
-    export function start(): void {
-        startNative()
-    }
-
-    /**
-     * Stop capturing raw PCM samples.
-     */
-    //% blockId=i2s_microphone_stop
-    //% block="stop I2S microphone"
-    //% group="Recording"
-    //% weight=85
-    export function stop(): void {
-        stopNative()
-    }
-
-    /**
-     * Read one signed 16-bit PCM sample. Returns 0 when no sample is available.
-     */
-    //% blockId=i2s_microphone_read_sample
-    //% block="I2S microphone sample"
-    //% group="Recording"
-    //% weight=80
-    export function readSample(): number {
-        return readSampleNative()
-    }
-
-    /**
-     * Record PCM audio and stream it to the serial speech-recognition gateway.
-     *
-     * The micro:bit cannot directly create and return an audio file or call an
-     * internet API by itself. This block streams PCM bytes over USB serial. A
-     * computer-side gateway should convert the stream to WAV, call the backend,
-     * and write back a line starting with #I2S_TEXT.
-     */
-    //% blockId=i2s_microphone_recognize
-    //% block="recognize speech for %milliseconds ms"
-    //% milliseconds.min=250 milliseconds.max=10000 milliseconds.defl=3000
+    //% blockId=microbit_microphone_recognize_configured
+    //% block="record speech and send to service"
     //% group="Speech recognition"
-    //% weight=70
-    export function recognizeSpeech(milliseconds: number): void {
+    //% weight=90
+    export function recognizeSpeech(): void {
+        recognizeSpeechFor(recordSeconds)
+    }
+
+    /**
+     * Record with the built-in microphone for 1-30 seconds, then send audio to the configured service.
+     */
+    //% blockId=microbit_microphone_recognize_for
+    //% block="record speech for %seconds seconds and send to service"
+    //% seconds.min=1 seconds.max=30 seconds.defl=3
+    //% group="Speech recognition"
+    //% weight=85
+    export function recognizeSpeechFor(seconds: number): void {
+        const duration = clampSeconds(seconds)
         const chunkSize = 128
         const chunk = pins.createBuffer(chunkSize)
-        const endAt = input.runningTime() + milliseconds
+        const endAt = input.runningTime() + duration * 1000
 
         resultText = ""
         resultReady = false
-        serial.writeLine("#I2S_BEGIN rate=" + currentRate + " bits=16 channels=1")
-        start()
+        serial.writeLine("#MIC_BEGIN url=" + serviceUrl + " rate=" + SAMPLE_RATE + " bits=16 channels=1 seconds=" + duration)
+        startNative()
 
         while (input.runningTime() < endAt) {
             const n = readPcmIntoBufferNative(chunk)
             if (n > 0) {
-                serial.writeLine("#I2S_CHUNK " + n)
+                serial.writeLine("#MIC_CHUNK " + n)
                 serial.writeBuffer(chunk.slice(0, n))
             } else {
                 basic.pause(1)
             }
         }
 
-        stop()
-        serial.writeLine("#I2S_END")
+        stopNative()
+        serial.writeLine("#MIC_END")
 
         const deadline = input.runningTime() + 15000
         while (input.runningTime() < deadline) {
             const line = serial.readLine()
-            if (line && line.indexOf("#I2S_TEXT ") == 0) {
+            if (line && line.indexOf("#MIC_TEXT ") == 0) {
                 resultText = line.substr(10)
                 resultReady = true
                 return
@@ -126,10 +95,10 @@ namespace i2sMicrophone {
     /**
      * Return true after the backend has sent recognition text back to micro:bit.
      */
-    //% blockId=i2s_microphone_speech_ready
+    //% blockId=microbit_microphone_speech_ready
     //% block="speech result ready"
     //% group="Speech recognition"
-    //% weight=60
+    //% weight=70
     export function speechResultReady(): boolean {
         return resultReady
     }
@@ -137,22 +106,22 @@ namespace i2sMicrophone {
     /**
      * Get the last speech-recognition result returned by the serial gateway.
      */
-    //% blockId=i2s_microphone_speech_text
+    //% blockId=microbit_microphone_speech_text
     //% block="speech text"
     //% group="Speech recognition"
-    //% weight=55
+    //% weight=65
     export function speechText(): string {
         return resultText
     }
 
-    //% shim=i2sMicrophone::setPins
-    function setPinsNative(dataPin: number, lrcPin: number, bckPin: number): void {
-        return
-    }
-
-    //% shim=i2sMicrophone::setSampleRate
-    function setSampleRateNative(rate: number): void {
-        return
+    function clampSeconds(seconds: number): number {
+        if (seconds < MIN_SECONDS) {
+            return MIN_SECONDS
+        }
+        if (seconds > MAX_SECONDS) {
+            return MAX_SECONDS
+        }
+        return Math.round(seconds)
     }
 
     //% shim=i2sMicrophone::start
@@ -163,11 +132,6 @@ namespace i2sMicrophone {
     //% shim=i2sMicrophone::stop
     function stopNative(): void {
         return
-    }
-
-    //% shim=i2sMicrophone::readSample
-    function readSampleNative(): number {
-        return 0
     }
 
     //% shim=i2sMicrophone::readPcmIntoBuffer

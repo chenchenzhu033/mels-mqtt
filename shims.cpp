@@ -1,36 +1,29 @@
 #include "pxt.h"
 
-#if defined(NRF52833_XXAA) || defined(NRF52840_XXAA) || defined(NRF52)
-#ifdef SCK
-#undef SCK
-#endif
+#if MICROBIT_CODAL && (defined(NRF52833_XXAA) || defined(NRF52840_XXAA) || defined(NRF52))
 #include "nrf.h"
-#define I2S_MIC_HAS_NRF_I2S 1
+#define BUILTIN_MIC_HAS_PDM 1
 #else
-#define I2S_MIC_HAS_NRF_I2S 0
+#define BUILTIN_MIC_HAS_PDM 0
 #endif
 
 namespace i2sMicrophone {
 
-static int dataPinId = MICROBIT_ID_IO_P0;
-static int lrcPinId = MICROBIT_ID_IO_P1;
-static int bckPinId = MICROBIT_ID_IO_P2;
-static int sampleRate = 16000;
 static volatile bool running = false;
 
-#if I2S_MIC_HAS_NRF_I2S
+#if BUILTIN_MIC_HAS_PDM
 static const int RING_SAMPLES = 2048;
+static const int DMA_SAMPLES = 256;
 static volatile int16_t ring[RING_SAMPLES];
 static volatile int ringHead = 0;
 static volatile int ringTail = 0;
-static const int DMA_WORDS = 256;
-static uint32_t rxA[DMA_WORDS];
-static uint32_t rxB[DMA_WORDS];
-static volatile int currentRx = 0;
-static volatile int lastCompletedRx = -1;
+static int16_t sampleA[DMA_SAMPLES];
+static int16_t sampleB[DMA_SAMPLES];
+static volatile int currentSampleBuffer = 0;
+static volatile int completedSampleBuffer = -1;
 #endif
 
-#if I2S_MIC_HAS_NRF_I2S
+#if BUILTIN_MIC_HAS_PDM
 static void pushSample(int16_t sample) {
     int next = (ringHead + 1) % RING_SAMPLES;
     if (next == ringTail) {
@@ -53,64 +46,32 @@ static void clearRing() {
     ringHead = 0;
     ringTail = 0;
 }
-#endif
 
-static uint32_t physicalPinFromDigitalPin(int pinId) {
-    switch (pinId) {
-        case MICROBIT_ID_IO_P0: return 2;
-        case MICROBIT_ID_IO_P1: return 3;
-        case MICROBIT_ID_IO_P2: return 4;
-        case MICROBIT_ID_IO_P8: return 10;
-        case MICROBIT_ID_IO_P12: return 12;
-        case MICROBIT_ID_IO_P13: return 17;
-        case MICROBIT_ID_IO_P14: return 1;
-        case MICROBIT_ID_IO_P15: return 13;
-        case MICROBIT_ID_IO_P16: return 14;
-        default: return 0xFFFFFFFF;
+static uint32_t microphonePin(int key) {
+    int value = getConfig(key, -1);
+    if (value < 0) {
+        return 0xFFFFFFFF;
     }
-}
 
-#if I2S_MIC_HAS_NRF_I2S
-static uint32_t mckForRate(int rate) {
-    if (rate <= 8000) {
-        return I2S_CONFIG_MCKFREQ_MCKFREQ_32MDIV63;
+    MicroBitPin *pin = pxt::getPin(value & CFG_PIN_NAME_MSK);
+    if (!pin) {
+        return 0xFFFFFFFF;
     }
-    if (rate >= 32000) {
-        return I2S_CONFIG_MCKFREQ_MCKFREQ_32MDIV15;
-    }
-    return I2S_CONFIG_MCKFREQ_MCKFREQ_32MDIV31;
+    return pin->name;
 }
 
 static void processCompletedBuffer() {
-    if (lastCompletedRx < 0) {
+    if (completedSampleBuffer < 0) {
         return;
     }
 
-    uint32_t *samples = lastCompletedRx == 0 ? rxA : rxB;
-    lastCompletedRx = -1;
-    for (int i = 0; i < DMA_WORDS; i++) {
-        pushSample((int16_t)(samples[i] >> 16));
+    int16_t *samples = completedSampleBuffer == 0 ? sampleA : sampleB;
+    completedSampleBuffer = -1;
+    for (int i = 0; i < DMA_SAMPLES; i++) {
+        pushSample(samples[i]);
     }
 }
 #endif
-
-//%
-void setPins(int dataPin, int lrcPin, int bckPin) {
-    dataPinId = dataPin;
-    lrcPinId = lrcPin;
-    bckPinId = bckPin;
-}
-
-//%
-void setSampleRate(int rate) {
-    if (rate <= 8000) {
-        sampleRate = 8000;
-    } else if (rate >= 32000) {
-        sampleRate = 32000;
-    } else {
-        sampleRate = 16000;
-    }
-}
 
 //%
 void start() {
@@ -118,79 +79,54 @@ void start() {
         return;
     }
 
-#if I2S_MIC_HAS_NRF_I2S
-    clearRing();
-
-    uint32_t data = physicalPinFromDigitalPin(dataPinId);
-    uint32_t lrc = physicalPinFromDigitalPin(lrcPinId);
-    uint32_t bck = physicalPinFromDigitalPin(bckPinId);
-    if (data == 0xFFFFFFFF || lrc == 0xFFFFFFFF || bck == 0xFFFFFFFF) {
+#if BUILTIN_MIC_HAS_PDM
+    uint32_t data = microphonePin(CFG_PIN_MIC_DATA);
+    uint32_t clock = microphonePin(CFG_PIN_MIC_CLOCK);
+    if (data == 0xFFFFFFFF || clock == 0xFFFFFFFF) {
         return;
     }
 
-    NRF_I2S->ENABLE = 0;
-    NRF_I2S->PSEL.SCK = bck;
-    NRF_I2S->PSEL.LRCK = lrc;
-    NRF_I2S->PSEL.MCK = 0xFFFFFFFF;
-    NRF_I2S->PSEL.SDOUT = 0xFFFFFFFF;
-    NRF_I2S->PSEL.SDIN = data;
-    NRF_I2S->CONFIG.MODE = I2S_CONFIG_MODE_MODE_Master;
-    NRF_I2S->CONFIG.RXEN = I2S_CONFIG_RXEN_RXEN_Enabled;
-    NRF_I2S->CONFIG.TXEN = I2S_CONFIG_TXEN_TXEN_Disabled;
-    NRF_I2S->CONFIG.MCKEN = I2S_CONFIG_MCKEN_MCKEN_Disabled;
-    NRF_I2S->CONFIG.MCKFREQ = mckForRate(sampleRate);
-    NRF_I2S->CONFIG.RATIO = I2S_CONFIG_RATIO_RATIO_64X;
-    NRF_I2S->CONFIG.SWIDTH = I2S_CONFIG_SWIDTH_SWIDTH_16Bit;
-    NRF_I2S->CONFIG.ALIGN = I2S_CONFIG_ALIGN_ALIGN_Left;
-    NRF_I2S->CONFIG.FORMAT = I2S_CONFIG_FORMAT_FORMAT_I2S;
-    NRF_I2S->CONFIG.CHANNELS = I2S_CONFIG_CHANNELS_CHANNELS_Left;
+    clearRing();
+    currentSampleBuffer = 0;
+    completedSampleBuffer = -1;
 
-    currentRx = 0;
-    lastCompletedRx = -1;
-    NRF_I2S->RXD.PTR = (uint32_t)rxA;
-    NRF_I2S->RXTXD.MAXCNT = DMA_WORDS;
-    NRF_I2S->EVENTS_RXPTRUPD = 0;
-    NRF_I2S->INTENSET = I2S_INTENSET_RXPTRUPD_Msk;
-    NVIC_ClearPendingIRQ(I2S_IRQn);
-    NVIC_SetPriority(I2S_IRQn, 1);
-    NVIC_EnableIRQ(I2S_IRQn);
+    NRF_PDM->ENABLE = 0;
+    NRF_PDM->PSEL.CLK = clock;
+    NRF_PDM->PSEL.DIN = data;
+    NRF_PDM->MODE = PDM_MODE_OPERATION_Mono << PDM_MODE_OPERATION_Pos;
+    NRF_PDM->GAINL = PDM_GAINL_GAINL_DefaultGain;
+    NRF_PDM->GAINR = PDM_GAINR_GAINR_DefaultGain;
+    NRF_PDM->SAMPLE.PTR = (uint32_t)sampleA;
+    NRF_PDM->SAMPLE.MAXCNT = DMA_SAMPLES;
+    NRF_PDM->EVENTS_END = 0;
+    NRF_PDM->INTENSET = PDM_INTENSET_END_Msk;
+
+    NVIC_ClearPendingIRQ(PDM_IRQn);
+    NVIC_SetPriority(PDM_IRQn, 1);
+    NVIC_EnableIRQ(PDM_IRQn);
 
     running = true;
-    NRF_I2S->ENABLE = 1;
-    NRF_I2S->TASKS_START = 1;
+    NRF_PDM->ENABLE = PDM_ENABLE_ENABLE_Enabled << PDM_ENABLE_ENABLE_Pos;
+    NRF_PDM->TASKS_START = 1;
 #endif
 }
 
 //%
 void stop() {
-#if I2S_MIC_HAS_NRF_I2S
+#if BUILTIN_MIC_HAS_PDM
     if (running) {
-        NRF_I2S->TASKS_STOP = 1;
-        NVIC_DisableIRQ(I2S_IRQn);
-        NRF_I2S->INTENCLR = I2S_INTENCLR_RXPTRUPD_Msk;
-        NRF_I2S->ENABLE = 0;
+        NRF_PDM->TASKS_STOP = 1;
+        NVIC_DisableIRQ(PDM_IRQn);
+        NRF_PDM->INTENCLR = PDM_INTENCLR_END_Msk;
+        NRF_PDM->ENABLE = PDM_ENABLE_ENABLE_Disabled << PDM_ENABLE_ENABLE_Pos;
     }
 #endif
     running = false;
 }
 
 //%
-int readSample() {
-#if I2S_MIC_HAS_NRF_I2S
-    processCompletedBuffer();
-    int16_t sample = 0;
-    if (!popSample(&sample)) {
-        return 0;
-    }
-    return sample;
-#else
-    return 0;
-#endif
-}
-
-//%
 int readPcmIntoBuffer(Buffer buffer) {
-#if I2S_MIC_HAS_NRF_I2S
+#if BUILTIN_MIC_HAS_PDM
     processCompletedBuffer();
     if (!buffer) {
         return 0;
@@ -210,15 +146,17 @@ int readPcmIntoBuffer(Buffer buffer) {
 
 }
 
-#if I2S_MIC_HAS_NRF_I2S
-extern "C" void I2S_IRQHandler(void) {
-    if (NRF_I2S->EVENTS_RXPTRUPD) {
-        NRF_I2S->EVENTS_RXPTRUPD = 0;
+#if BUILTIN_MIC_HAS_PDM
+extern "C" void PDM_IRQHandler(void) {
+    if (NRF_PDM->EVENTS_END) {
+        NRF_PDM->EVENTS_END = 0;
         if (i2sMicrophone::running) {
-            i2sMicrophone::lastCompletedRx = i2sMicrophone::currentRx;
-            i2sMicrophone::currentRx = i2sMicrophone::currentRx == 0 ? 1 : 0;
-            NRF_I2S->RXD.PTR = (uint32_t)(i2sMicrophone::currentRx == 0 ? i2sMicrophone::rxA : i2sMicrophone::rxB);
-            NRF_I2S->RXTXD.MAXCNT = i2sMicrophone::DMA_WORDS;
+            i2sMicrophone::completedSampleBuffer = i2sMicrophone::currentSampleBuffer;
+            i2sMicrophone::currentSampleBuffer = i2sMicrophone::currentSampleBuffer == 0 ? 1 : 0;
+            NRF_PDM->SAMPLE.PTR = (uint32_t)(i2sMicrophone::currentSampleBuffer == 0
+                ? i2sMicrophone::sampleA
+                : i2sMicrophone::sampleB);
+            NRF_PDM->SAMPLE.MAXCNT = i2sMicrophone::DMA_SAMPLES;
         }
     }
 }

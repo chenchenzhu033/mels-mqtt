@@ -3,14 +3,15 @@ import argparse
 import io
 import json
 import re
+import shlex
 import wave
 
 import requests
 import serial
 
 
-BEGIN_RE = re.compile(rb"#I2S_BEGIN\s+rate=(\d+)\s+bits=(\d+)\s+channels=(\d+)")
-CHUNK_RE = re.compile(rb"#I2S_CHUNK\s+(\d+)")
+BEGIN_RE = re.compile(r"#MIC_BEGIN\s+(.+)")
+CHUNK_RE = re.compile(rb"#MIC_CHUNK\s+(\d+)")
 
 
 def pcm_to_wav(pcm: bytes, sample_rate: int, channels: int) -> bytes:
@@ -37,29 +38,43 @@ def extract_text(response: requests.Response) -> str:
 
 
 def post_to_backend(url: str, wav_bytes: bytes) -> str:
-    files = {"file": ("microbit-i2s.wav", wav_bytes, "audio/wav")}
+    files = {"file": ("microbit-microphone.wav", wav_bytes, "audio/wav")}
     response = requests.post(url, files=files, timeout=60)
     response.raise_for_status()
     return extract_text(response)
 
 
-def read_capture(port: serial.Serial):
-    line = port.readline()
-    match = BEGIN_RE.search(line)
+def parse_begin(line: bytes) -> dict:
+    text = line.decode("utf-8", errors="replace").strip()
+    match = BEGIN_RE.search(text)
     if not match:
         return None
 
-    sample_rate = int(match.group(1))
-    bits = int(match.group(2))
-    channels = int(match.group(3))
+    values = {}
+    for token in shlex.split(match.group(1)):
+        if "=" in token:
+            key, value = token.split("=", 1)
+            values[key] = value
+    return values
+
+
+def read_capture(port: serial.Serial):
+    values = parse_begin(port.readline())
+    if values is None:
+        return None
+
+    sample_rate = int(values.get("rate", "16000"))
+    bits = int(values.get("bits", "16"))
+    channels = int(values.get("channels", "1"))
+    url = values.get("url", "")
     if bits != 16:
         raise ValueError(f"Only 16-bit PCM is supported, got {bits}")
 
     payload = bytearray()
     while True:
         line = port.readline().strip()
-        if line == b"#I2S_END":
-            return sample_rate, channels, bytes(payload)
+        if line == b"#MIC_END":
+            return url, sample_rate, channels, bytes(payload)
 
         chunk = CHUNK_RE.search(line)
         if chunk:
@@ -68,9 +83,9 @@ def read_capture(port: serial.Serial):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="micro:bit I2S microphone speech-recognition gateway")
+    parser = argparse.ArgumentParser(description="micro:bit built-in microphone speech-recognition gateway")
     parser.add_argument("--port", required=True, help="Serial port, for example /dev/tty.usbmodem1102 or COM5")
-    parser.add_argument("--backend", required=True, help="Speech backend URL that accepts multipart field 'file'")
+    parser.add_argument("--backend", help="Default speech backend URL when the micro:bit did not send one")
     parser.add_argument("--baud", type=int, default=115200)
     args = parser.parse_args()
 
@@ -81,14 +96,17 @@ def main():
             if capture is None:
                 continue
 
-            sample_rate, channels, pcm = capture
+            url, sample_rate, channels, pcm = capture
             wav_bytes = pcm_to_wav(pcm, sample_rate, channels)
             try:
-                text = post_to_backend(args.backend, wav_bytes)
+                backend = url or args.backend
+                if not backend:
+                    raise ValueError("No backend URL provided by micro:bit or --backend")
+                text = post_to_backend(backend, wav_bytes)
             except Exception as exc:
                 text = f"ERROR: {exc}"
 
-            port.write(("#I2S_TEXT " + text.replace("\n", " ") + "\n").encode("utf-8"))
+            port.write(("#MIC_TEXT " + text.replace("\n", " ") + "\n").encode("utf-8"))
             port.flush()
             print(text)
 

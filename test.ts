@@ -1,9 +1,12 @@
-i2sMicrophone.setPins(DigitalPin.P0, DigitalPin.P1, DigitalPin.P2)
-i2sMicrophone.setSampleRate(i2sMicrophone.SampleRate.Rate16000)
+i2sMicrophone.setSpeechServiceUrl("http://localhost:8000/speech-to-text")
+i2sMicrophone.setRecordingDuration(3)
 
 input.onButtonPressed(Button.A, function () {
-    i2sMicrophone.start()
-    basic.pause(100)
-    serial.writeLine("sample=" + i2sMicrophone.readSample())
-    i2sMicrophone.stop()
+    basic.showIcon(IconNames.SmallDiamond)
+    i2sMicrophone.recognizeSpeech()
+    if (i2sMicrophone.speechResultReady()) {
+        basic.showString(i2sMicrophone.speechText())
+    } else {
+        basic.showString("NO")
+    }
 })

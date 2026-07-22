@@ -1,7 +1,7 @@
 {
     "name": "i2s-microphone",
     "version": "0.0.1",
-    "description": "MakeCode extension for using an I2S microphone on micro:bit v2.",
+    "description": "MakeCode extension for recording with the micro:bit v2 built-in microphone and sending audio to a speech-recognition service.",
     "license": "MIT",
     "dependencies": {
         "core": "*",
