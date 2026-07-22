@@ -97,7 +97,7 @@ namespace MQTTSpeech {
     export function recordAndSendFor(seconds: number): void {
         const duration = clampSeconds(seconds)
         const session = "" + control.millis()
-        const chunk = pins.createBuffer(256)
+        const chunk = pins.createBuffer(64)
         const endAt = input.runningTime() + duration * 1000
         let index = 0
 

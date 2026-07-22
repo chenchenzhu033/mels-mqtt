@@ -232,7 +232,7 @@ namespace MQTT {
         topic = topic.replace(",", "")
         data = data.replace("\"", "'")
         serial.writeString("AT+MQTTPUB=0,\"" + topic + "\",\"" + data + "\",1,0\r\n")
-        basic.pause(30)
+        basic.pause(250)
     }
 
     /**
