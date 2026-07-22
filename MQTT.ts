@@ -164,9 +164,9 @@ namespace MQTT {
        
         // Emmqtt_serial_init();
         // emqtt_connect_wifi();
-        MQTT_CLIENT_ID = clientId;
-        MQTT_CLIENT_NAME = username;
-        MQTT_CLIENT_PASSWORD = clientPwd;
+        MQTT_CLIENT_ID = clientId || "";
+        MQTT_CLIENT_NAME = username || "";
+        MQTT_CLIENT_PASSWORD = clientPwd || "";
         MQTT_SERVER_IP = serverIp;
         MQTT_SERVER_PORT = serverPort;
         emmqtt_connect_iot("mqtt");
@@ -195,9 +195,9 @@ namespace MQTT {
        
         // Emmqtt_serial_init();
         // emqtt_connect_wifi();
-        MQTT_CLIENT_ID = clientId;
-        MQTT_CLIENT_NAME = username;
-        MQTT_CLIENT_PASSWORD = clientPwd;
+        MQTT_CLIENT_ID = clientId || "";
+        MQTT_CLIENT_NAME = username || "";
+        MQTT_CLIENT_PASSWORD = clientPwd || "";
         MQTT_SERVER_IP = serverIp;
         MQTT_SERVER_PORT = serverPort;
 		
