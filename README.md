@@ -1,8 +1,6 @@
-# micro:bit Built-in Microphone Speech Recognition
+# I2S Microphone Speech Recognition for micro:bit
 
-MakeCode micro:bit extension for recording audio with the micro:bit v2 built-in microphone and sending it to a speech-recognition service through a serial gateway.
-
-No external I2S microphone wiring is required.
+MakeCode micro:bit extension for recording audio with an external I2S microphone and sending it to a speech-recognition service through a serial gateway.
 
 ## Important limitation
 
@@ -11,11 +9,23 @@ The micro:bit cannot directly send HTTP requests to an internet service by itsel
 ## Blocks
 
 - `set speech service URL ...`
+- `set I2S microphone pins data ... lrc ... bck ...`
+- `set I2S capture channel ...`
 - `set speech recording duration ... seconds`
 - `record speech and send to service`
 - `record speech for ... seconds and send to service`
 - `speech result ready`
 - `speech text`
+
+### Wiring
+
+- `G` -> `GND`
+- `V` -> `3V`
+- `DATA` -> `P0`
+- `LRC` -> `P1`
+- `BCK` -> `P2`
+
+If your microphone module uses the opposite I2S channel, switch the capture channel block.
 
 The recording duration is clamped to 1-30 seconds. When the duration is reached, the microphone is stopped automatically and the collected audio is sent to the configured service.
 
@@ -23,6 +33,8 @@ The recording duration is clamped to 1-30 seconds. When the duration is reached,
 
 ```typescript
 i2sMicrophone.setSpeechServiceUrl("http://localhost:8000/speech-to-text")
+i2sMicrophone.setI2SMicrophonePins(DigitalPin.P0, DigitalPin.P1, DigitalPin.P2)
+i2sMicrophone.setI2SCaptureChannel(I2SCaptureChannel.Left)
 i2sMicrophone.setRecordingDuration(3)
 
 input.onButtonPressed(Button.A, function () {
@@ -67,4 +79,4 @@ The backend should accept multipart form field `file` containing a WAV file and 
 
 ## Hardware notes
 
-This extension targets micro:bit v2 because micro:bit v1 does not have the built-in microphone.
+This extension targets micro:bit v2 because I2S audio capture uses the CODAL runtime on the v2 target.

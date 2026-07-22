@@ -73,7 +73,7 @@ def read_capture(port: serial.Serial):
     payload = bytearray()
     while True:
         line = port.readline().strip()
-        if line == b"#MIC_END":
+        if line.startswith(b"#MIC_END"):
             return url, sample_rate, channels, bytes(payload)
 
         chunk = CHUNK_RE.search(line)
